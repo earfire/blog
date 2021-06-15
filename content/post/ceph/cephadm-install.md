@@ -1,6 +1,6 @@
 ---
 title: "通过cephadm工具安装部署ceph集群"
-date: 2020-08-14T15:03:25+08:00
+date: 2020-03-21T15:03:25+08:00
 draft: false
 tags: ["ceph"]
 categories: ["ceph"]

@@ -1,6 +1,6 @@
 ---
 title: "ceph PG状态迁移"
-date: 2021-02-04T15:36:02+08:00
+date: 2021-02-03T20:36:02+08:00
 draft: false
 tags: ["ceph"]
 categories: ["ceph"]

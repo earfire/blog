@@ -1,6 +1,6 @@
 ---
 title: "ceph Monitor"
-date: 2020-08-09T22:03:25+08:00
+date: 2020-06-09T22:03:25+08:00
 draft: false
 tags: ["ceph"]
 categories: ["ceph"]
@@ -18,7 +18,7 @@ Ceph对Paxos做了简化，将集群表的更新操作进行了串行化处理�
 
 Ceph存在各种不同类型的、需要依赖于Monitor进行集中式管理的数据，例如集群表、集群级别的统计和告警等，因此产生了各种不同类型的Monitor，如AuthMonitor、HealthMonitor、LogMonitor、MDSMonitor、OSDMonitor、PGMonitor。所有类型的Monitor中，OSDMonitor是最主要的，它负责守护集群表。
 
-集群表主要由两部分组成:一是集群拓扑结果和用于计算寻址的CRUSH规则，即CRUSH map(对其两者进行统一管理)，二是素有OSD的身份和状态信息。因为CRUSH map也是围绕OSD构建的，集群表也被称为OSDMap。OSDMap不仅记录了OSD相关的信息，还记录了存储池信息。
+集群表主要由两部分组成:一是集群拓扑结构和用于计算寻址的CRUSH规则，即CRUSH map(对其两者进行统一管理)，二是所有OSD的身份和状态信息。因为CRUSH map也是围绕OSD构建的，集群表也被称为OSDMap。OSDMap不仅记录了OSD相关的信息，还记录了存储池信息。
 
 
 OSD采用点对点而不是广播方式传播OSDMap，主要是为了避免当集群存在大量OSD时引起广播风暴。
@@ -273,10 +273,51 @@ void Elector::handle_victory(MonOpRequestRef op)
     mon->set_leader_commands(new_cmds);
 }
 
-
 ```
 
+选举超时
 
-### Recovery阶段
+```
+void Elector::expire()
+{
+    // did i win? 如果是自荐，只要超过半数同意，就认为成功
+    if (electing_me &&
+        acked_me.size() > (unsigned)(mon->monmap->size() / 2)) {
+        // i win
+        victory();
+    } else { ////没有推选自己
+        // whoever i deferred to didn't declare victory quickly enough.
+        if (mon->has_ever_joined)
+            start(); //之前我加入过quorum，直接重新发动选举。因为monmap中会包含我。
+        else
+            mon->bootstrap(); //会发送探测消息
+    }
+}
+```
 
+### Phase 1阶段
 
+Ceph的Paxos协议的Phase1阶段，即Prepare阶段，其目的是就PN达成一致，同时进行Recovery。
+
+Leader当选后，会首先执行一次phase 1过程，以确定PN。在其为leader期间，所有的phase 2操作都共用一个PN。所以省略了大量的phase 1操作，这也是paxos能够减小网络开销的原因。
+
+| 步骤 	| Leader | Peons | 描述 |  
+| ----- |:------:|:-----:|:----:|
+| 1	    | collect() | | Leader给quorum中各个peon发送PN以及其他附带信息 |
+| 2	    |       | handle_collect() | Peon同意或者拒绝PN。并中间可能分享已经commit的数据 |
+| 3	    | handle_last| | Quorum中peon全部同意leader的PN，才算成功 |
+
+对于Recovery，在选举之前已经进行过一次数据同步，但当时是在monitor之间的paxos版本号的差距比较大的情况下进行的，而其差异在一定的范围内时，在这里还需要进一步的数据恢复。
+
+### Phase 2阶段
+
+Phase 2阶段，即正常工作过程中的Propose、accept和commit过程。
+
+| 步骤 	| Leader | Peons | 描述 |  
+| ----- |:------:|:-----:|:----:|
+| 1	    | begin() |         | Leader给quorum中各个成员发送提议，包含PN、version和内容 |
+| 2	    |  | handle_begin() | Peon处理提议，有可能会拒绝 |
+| 3	    | handle_accept() | | 只有quorum中所有成员都同意，才算成功 |
+| 4	    | commit_start() |  | 在收到所有ack后调用，用事务写commit记录，并设置回调函数 |
+| 5	    | commit_finish() | | 上一步的回调函数，在实际事务完成时执行 |
+| 6	    |  | handle_commit()| Peon根据leader的commit消息同步状态 |

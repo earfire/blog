@@ -1,6 +1,6 @@
 ---
 title: "ceph客户端"
-date: 2020-08-17T18:21:02+08:00
+date: 2020-04-16T18:21:02+08:00
 draft: false
 tags: ["ceph"]
 categories: ["ceph"]

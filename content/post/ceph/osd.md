@@ -1,6 +1,6 @@
 ---
 title: "ceph OSD"
-date: 2020-10-25T20:53:34+08:00
+date: 2020-08-23T20:53:34+08:00
 draft: false
 tags: ["ceph"]
 categories: ["ceph"]

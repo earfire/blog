@@ -1,6 +1,6 @@
 ---
 title: "ceph数据恢复"
-date: 2021-02-06T09:31:37+08:00
+date: 2021-02-27T09:31:37+08:00
 draft: false
 tags: ["ceph"]
 categories: ["ceph"]
@@ -17,6 +17,8 @@ Peering完成之后，如果Primary检测到ActingBackfill中的任意一个副�
 ### 资源预留
 
 为了防止集群中大量PG同时执行Recovery从而严重影响正常业务，需要对Recovery进行约束。
+例如：osd_max_backfills，单个OSD允许同时执行Recovery或者Backfill的PG个数。
+osd_recovery_max_active，每个OSD允许并发进行Recovery/Backfill的对象数
 
 
 ### 过程
@@ -60,6 +62,11 @@ void OSD::do_recovery( //数据修复
   service.release_reserved_pushes(reserved_pushes);
 }
 
+```
+
+PrimaryLogPG用来处理PG相关的修复操作。函数start_recovery_ops调用recover_primary和recover_replicas来修复该PG上对象的主副本和从副本。修复完成后，如果仍需要Backfill过程，则抛出相关事件触发PG状态机，开始Backfill过程。
+
+```
 
 bool PrimaryLogPG::start_recovery_ops(
   uint64_t max,
@@ -201,6 +208,91 @@ bool PrimaryLogPG::start_recovery_ops(
 }
 
 ```
+
+
+## Backfill
+
+### 资源预留
+
+同样，Backfill也需先进行资源预留。资源预留成功之后，PG开始正式执行Backfill。
+
+### 过程
+
+数据结构BackfillInterval用来记录每个peer上的Backfill过程。
+
+```
+struct BackfillInterval {
+    // info about a backfill interval on a peer
+    eversion_t version; /// version at which the scan occurred
+    map<hobject_t,eversion_t> objects; //本次扫描到的对象及其实时版本号
+    hobject_t begin; //本次扫描的起点
+    hobject_t end; //本次扫描的结束
+};
+```
+
+函数recover_backfill作为Backfill过程的核心函数，控制整个Backfill修复进程。
+
+```
+uint64_t PrimaryLogPG::recover_backfill(uint64_t max,
+    ThreadPool::TPHandle &handle, bool *work_started)
+{
+    //Primary通过backfill_info对Backfill的整体进度进行跟踪，peer_backfile_info则记录了每个Backfill副本的实时进度。
+    // update our local interval to cope with recent changes
+    backfill_info.begin = last_backfill_started;
+    update_range(&backfill_info, handle);
+    for (set<pg_shard_t>::iterator i = backfill_targets.begin();
+            i != backfill_targets.end();
+            ++i) {
+        peer_backfill_info[*i].trim_to(
+                std::max(peer_info[*i].last_backfill, last_backfill_started));
+    }
+    backfill_info.trim_to(last_backfill_started);
+
+    while (ops < max) {
+        if (backfill_info.begin <= earliest_peer_backfill() &&
+                !backfill_info.extends_to_end() && backfill_info.empty()) {
+            //需要继续扫描更多的对象
+        }
+
+        for (set<pg_shard_t>::iterator i = backfill_targets.begin();
+                i != backfill_targets.end(); ++i) {
+            pg_shard_t bt = *i;
+            BackfillInterval& pbi = peer_backfill_info[bt];
+
+            if (pbi.begin <= backfill_info.begin &&
+                    !pbi.extends_to_end() && pbi.empty()) {
+                epoch_t e = get_osdmap_epoch();
+                MOSDPGScan *m = new MOSDPGScan( //获取该OSD目前拥有的对象列表
+                        MOSDPGScan::OP_SCAN_GET_DIGEST, pg_whoami, e, last_peering_reset,
+                        spg_t(info.pgid.pgid, bt.shard),
+                        pbi.end, hobject_t());
+                osd->send_message_osd_cluster(bt.osd, m, get_osdmap_epoch());
+                waiting_on_backfill.insert(bt);
+                sent_scan = true;
+            }
+        }
+
+        if (check < backfill_info.begin) {//check对象
+            to_remove.push_back();
+        } else {
+            need_ver_targs.push_back();
+            keep_ver_targs.push_back();
+            missing_targs.push_back();
+            skip_targs.push_back();
+        }
+    }
+
+    for (auto p : reqs) {
+        osd->send_message_osd_cluster(p.first.osd, p.second, get_osdmap_epoch());
+    }
+
+    ...
+}
+
+``` 
+
+
+
 
 
 

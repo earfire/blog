@@ -1,6 +1,6 @@
 ---
 title: "ceph CRUSH算法"
-date: 2020-07-28T20:42:11+08:00
+date: 2020-03-14T20:42:11+08:00
 draft: false
 tags: ["ceph"]
 categories: ["ceph"]
@@ -9,7 +9,7 @@ categories: ["ceph"]
 
 ## 简介
 
-CRUSH(Controlled Replication Under Scalable Hashing),是一种基于哈希的数据分布算法。与另一种基于集中式的元数据查询的存储方式(文件的分布信息需要先通过访问集中元数据服务器获得)不同，它以数据唯一标识符、当前存储集群的拓扑结构以及数据分布策略作为CRUSH的输入，经过计算获得数据分布位置，直接与OSDs进行通信，从而避免集中式查询操作，实现取中心化和高度并发。
+CRUSH(Controlled Replication Under Scalable Hashing),是一种基于哈希的数据分布算法。与另一种基于集中式的元数据查询的存储方式(文件的分布信息需要先通过访问集中元数据服务器获得)不同，它以数据唯一标识符、当前存储集群的拓扑结构以及数据分布策略作为CRUSH的输入，经过计算获得数据分布位置，直接与OSDs进行通信，从而避免集中式查询操作，实现去中心化和高度并发。
 
 数据分布算法：
 数据分布和负载均衡、灵活应对集群伸缩、支持大规模集群。
@@ -37,7 +37,7 @@ else
 
 ## CRUSH算法
 
-针对指定输入x(要计算PG的pg_id)，CRUSH将输出一个包含n个不同目标存储对象(例如磁盘)的集合(OSD列表)。CRUSH的计算过程使用x、cluster map、placement rule作为哈希函数输入。因此如果cluster map不发送变化(一般placement rule不会轻易变化)，那么结果就是确定的。
+针对指定输入x(要计算PG的pg_id)，CRUSH将输出一个包含n个不同目标存储对象(例如磁盘)的集合(OSD列表)。CRUSH的计算过程使用x、cluster map、placement rule作为哈希函数输入。因此如果cluster map不发生变化(一般placement rule不会轻易变化)，那么结果就是确定的。
 
 cluster map集群的层级化描述，形如"数据中心->机架->主机->磁盘"这样的层级拓扑。用树来表示，每个叶子节点都是真实的最小物理存储设备(例如磁盘)，称为devices；所有中间节点统称为bucket，每个bucket可以是一些devices的集合，也可以是低一级的buckets集合；根节点称为root，是整个集群的入口。
 

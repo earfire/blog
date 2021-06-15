@@ -8,7 +8,7 @@ categories: ["os"]
 
 ## 前言
 
-在看DPDK的源码librte_ring时看到了在实现lock-free队列时使用到了内存屏障，对缓存进行更深一步的理解。
+在看DPDK的源码librte_ring时看到了在实现lockless队列时使用到了内存屏障，对缓存进行更深一步的理解。
 
 ```
 static __rte_always_inline unsigned int

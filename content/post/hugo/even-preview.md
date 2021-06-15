@@ -1,7 +1,7 @@
 ---
 title: "Theme preview"
-date: 2018-07-25T23:02:18+08:00
-lastmod: 2018-07-25T23:02:18+08:00
+date: 2018-07-22T23:02:18+08:00
+lastmod: 2018-07-22T23:02:18+08:00
 draft: false
 tags: ["hugo"]
 categories: ["hugo"]
