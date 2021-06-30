@@ -54,7 +54,7 @@ DPDK实现了支持单/多生产者－单/多消费者的lockless队列librte_ri
 
 ## 地址对齐
 
-当变量的地址被它本身的长度整除时，存取该变量最高校。通常对于频繁访问的结构体，要将其按缓存行大小对齐，减少Cass Miss、False Sharing。
+当变量的地址被它本身的长度整除时，存取该变量最高校。通常对于频繁访问的结构体，要将其按缓存行大小对齐，减少Cache Miss、False Sharing。
 
 ```
 (uing64_t)&val % sizeof(var) == 0
